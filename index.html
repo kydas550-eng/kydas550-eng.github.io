@@ -27,6 +27,7 @@
     #terminal { display: none; position: fixed; inset: 0; z-index: 2; }
     
     .crt-screen {
+      position: relative;
       display: flex; flex-direction: column;
       width: 100%; height: 100%;
       background: #020502;
@@ -69,18 +70,24 @@
 
     .noise {
       position: absolute; inset: 0;
-      background: url("image/svg+xml;utf8,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background: url("data:image/svg+xml;utf8,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
       opacity: 0.03; mix-blend-mode: screen; pointer-events: none; z-index: 9;
     }
 
-    #output { flex: 1; overflow-y: auto; white-space: pre-wrap; padding: 20px; line-height: 1.4; }
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      padding: 20px;
+      line-height: 1.4;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    #output::-webkit-scrollbar {
+      display: none;
+    }
     #input-line { display: flex; align-items: center; padding: 0 20px 20px; }
     #cmd-input { background: transparent; border: none; outline: none; font-family: inherit; font-size: inherit; flex: 1; }
-
-    #output::-webkit-scrollbar { width: 6px; }
-    #output::-webkit-scrollbar-track { background: #000; }
-    #output::-webkit-scrollbar-thumb { background: #33ff33; border-radius: 3px; }
-    #terminal.pink-mode #output::-webkit-scrollbar-thumb { background: #ff66b2; }
   </style>
 </head>
 <body>
@@ -104,15 +111,17 @@
     const output = document.getElementById('output');
     const input = document.getElementById('cmd-input');
     
-    let terminalState = 'IDLE'; 
+    // 🎛️ Состояния системы
+    let state = 'IDLE'; // IDLE, LOGIN, PASSWORD, DIALOGUE, COMMAND
     let tempLogin = '';
-    let dialogueActive = false; 
+    let dialogueResolver = null; // Промис-резолвер для ожидания ввода в диалоге
     const CREDS = { login: 'Ан-30', pass: '30001' };
     const DIALOGUE_VARS = { reward: "Древний ключ активирован. Архивы разблокированы." };
 
+    // 🖱️ Активация терминала (12 тапов)
     function activateTerminal() {
-      if (terminalState !== 'IDLE') return;
-      terminalState = 'LOGIN';
+      if (state !== 'IDLE') return;
+      state = 'LOGIN';
       term.classList.remove('pink-mode'); 
       
       if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
@@ -126,49 +135,62 @@
       }, 400);
     }
 
-    // 📱 Только мобильные тапы (12 раз)
     let tapCount = 0, tapTimer = null;
     const TAP_LIMIT = 12, TAP_TIMEOUT = 2000;
     bg.addEventListener('click', (e) => {
       if (!('ontouchstart' in window) && !navigator.maxTouchPoints) return;
-      if (terminalState !== 'IDLE') return;
+      if (state !== 'IDLE') return;
       tapCount++; clearTimeout(tapTimer);
       tapTimer = setTimeout(() => { tapCount = 0; }, TAP_TIMEOUT);
       if (tapCount === TAP_LIMIT) { tapCount = 0; activateTerminal(); }
     });
 
-    // ⌨️ Обработка ввода
+    // ⌨️ ЕДИНЫЙ ОБРАБОТЧИК ВВОДА
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
       const val = input.value.trim();
       input.value = '';
 
-      if (terminalState === 'LOGIN') {
-        tempLogin = val; terminalState = 'PASSWORD';
-        input.type = 'password'; output.textContent += '\npassword: ';
-      } else if (terminalState === 'PASSWORD') {
+      if (state === 'LOGIN') {
+        tempLogin = val;
+        state = 'PASSWORD';
+        input.type = 'password';
+        output.textContent += '\npassword: ';
+      } 
+      else if (state === 'PASSWORD') {
         if (tempLogin === CREDS.login && val === CREDS.pass) {
-          terminalState = 'ACTIVE'; input.type = 'text';
+          state = 'DIALOGUE';
+          input.type = 'text';
           term.classList.add('pink-mode');
           output.textContent += '\nACCESS GRANTED\n';
-          startDialogue(); // 🟢 Запуск сценария
+          // Небольшая задержка, чтобы сбросить буфер клавиатуры
+          setTimeout(() => startDialogue(), 150);
         } else {
           output.textContent += '\nACCESS DENIED\n';
-          tempLogin = ''; terminalState = 'LOGIN';
-          input.type = 'text'; term.classList.remove('pink-mode');
+          tempLogin = '';
+          state = 'LOGIN';
+          input.type = 'text';
+          term.classList.remove('pink-mode');
           output.textContent += 'login: ';
         }
-      } else if (terminalState === 'ACTIVE' && !dialogueActive) {
+      } 
+      else if (state === 'DIALOGUE') {
+        // Передаём ввод в движок диалога
+        if (dialogueResolver) {
+          dialogueResolver(val);
+          dialogueResolver = null;
+        }
+      } 
+      else if (state === 'COMMAND') {
         output.textContent += `\n> ${val}\n`;
         processCommand(val.toLowerCase());
       }
       input.focus();
     });
 
-    // 🎬 ДВИЖОК ДИАЛОГОВ (Переписан)
+    // 🎬 ДВИЖОК ДИАЛОГОВ
     async function startDialogue() {
-      dialogueActive = true;
       try {
         const res = await fetch('dialogue.txt');
         if (!res.ok) throw new Error('Файл не найден');
@@ -178,13 +200,11 @@
         console.warn('Диалог не загружен:', err);
         await typeText('Система: Сценарий недоступен.\n');
       }
-      dialogueActive = false;
-      terminalState = 'ACTIVE';
+      state = 'COMMAND';
       input.focus();
     }
 
     function parseDialogue(text) {
-      // Нормализуем табы в пробелы
       text = text.replace(/\t/g, '    ');
       const lines = text.split('\n')
         .map(l => l.replace(/\/\/.*$/, '').trim())
@@ -198,26 +218,33 @@
         const indent = line.search(/\S/);
         const content = line.trim();
 
-        while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
-          stack.pop();
-        }
+        while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
         const parent = stack[stack.length - 1].node;
 
         if (content.startsWith('bot:')) {
           let val = content.slice(4).trim();
-          if (val.startsWith('(') && val.endsWith(')')) {
-            val = val.slice(1, -1).split(',').map(s => s.trim());
-          }
+          if (val.startsWith('(') && val.endsWith(')')) val = val.slice(1,-1).split(',').map(s=>s.trim());
           parent.outputs.push(val);
         } else if (content.startsWith(':')) {
           let val = content.slice(1).trim();
           if (parent.outputs.length > 0) {
-            const last = parent.outputs[parent.outputs.length - 1];
-            parent.outputs[parent.outputs.length - 1] = Array.isArray(last) ? val : last + '\n' + val;
+            const last = parent.outputs[parent.outputs.length-1];
+            if (Array.isArray(last)) {
+              parent.outputs[parent.outputs.length-1] = last.map(v => v + '\n' + val);
+            } else {
+              parent.outputs[parent.outputs.length-1] = last + '\n' + val;
+            }
           }
         } else if (content.startsWith('user:')) {
           let raw = content.slice(5).trim();
-          let triggers = raw === '*' ? ['*'] : raw.slice(1, -1).split(',').map(s => s.trim().toLowerCase());
+          let triggers;
+          if (raw === '*') {
+            triggers = ['*'];
+          } else if (raw.startsWith('(') && raw.endsWith(')')) {
+            triggers = raw.slice(1, -1).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+          } else {
+            triggers = [raw.toLowerCase()];
+          }
           const newNode = { outputs: [], branches: [], isEnd: false };
           parent.branches.push({ triggers, node: newNode });
           stack.push({ node: newNode, indent });
@@ -234,16 +261,16 @@
         if (Array.isArray(msg)) msg = msg[Math.floor(Math.random() * msg.length)];
         msg = msg.replace(/\{(\w+)\}/g, (_, k) => DIALOGUE_VARS[k] || `{${k}}`);
         await typeText(msg + '\n');
-        await delay(250); // Пауза для естественности
+        await delay(300); // Пауза между репликами
       }
 
       if (node.isEnd) return;
 
-      // 2. Ожидание ввода
-      const userInput = await waitForInput();
+      // 2. Ждём ввод пользователя (асинхронно)
+      const userInput = await waitForDialogueInput();
       const inputLower = userInput.toLowerCase();
 
-      // 3. Поиск ветки (точные совпадения > *)
+      // 3. Поиск ветки
       let branch = node.branches.find(b => b.triggers.includes(inputLower));
       if (!branch) branch = node.branches.find(b => b.triggers.includes('*'));
 
@@ -251,22 +278,13 @@
         await executeNode(branch.node);
       } else {
         await typeText('Система не распознала ввод. Попробуйте снова.\n');
-        await executeNode(node); // Повторяем текущий узел
+        await executeNode(node); // Повторяем шаг
       }
     }
 
-    function waitForInput() {
+    function waitForDialogueInput() {
       return new Promise(resolve => {
-        const handler = (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            const val = input.value.trim();
-            input.value = '';
-            input.removeEventListener('keydown', handler);
-            resolve(val);
-          }
-        };
-        input.addEventListener('keydown', handler);
+        dialogueResolver = resolve;
       });
     }
 
