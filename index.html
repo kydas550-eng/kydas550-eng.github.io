@@ -206,17 +206,19 @@
 
     function parseDialogue(text) {
       text = text.replace(/\t/g, '    ');
+      // Важно: не trim() всю строку — иначе теряются отступы и всё оказывается на корне (один «поток» бота).
       const lines = text.split('\n')
-        .map(l => l.replace(/\/\/.*$/, '').trim())
-        .filter(l => l.length > 0);
+        .map(l => l.replace(/\/\/.*$/, '').replace(/\s+$/, ''))
+        .filter(l => l.trim().length > 0);
 
       const root = { outputs: [], branches: [], isEnd: false };
       const stack = [{ node: root, indent: -1 }];
 
       for (const line of lines) {
-        if (line === 'start:') continue;
-        const indent = line.search(/\S/);
         const content = line.trim();
+        if (content === 'start:') continue;
+        const indent = line.search(/\S/);
+        if (indent < 0) continue;
 
         while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
         const parent = stack[stack.length - 1].node;
@@ -255,30 +257,43 @@
       return root;
     }
 
+    function pickBranch(branches, inputLower) {
+      // Как в боте: одиночный триггер → группа → *
+      const single = branches.find(
+        b => b.triggers.length === 1 && b.triggers[0] !== '*' && b.triggers[0] === inputLower
+      );
+      if (single) return single;
+      const group = branches.find(
+        b => b.triggers.length > 1 && b.triggers.includes(inputLower)
+      );
+      if (group) return group;
+      return branches.find(b => b.triggers.includes('*')) || null;
+    }
+
     async function executeNode(node) {
       // 1. Вывод сообщений бота
       for (let msg of node.outputs) {
         if (Array.isArray(msg)) msg = msg[Math.floor(Math.random() * msg.length)];
         msg = msg.replace(/\{(\w+)\}/g, (_, k) => DIALOGUE_VARS[k] || `{${k}}`);
-        await typeText(msg + '\n');
+        if (msg.length) await typeText(msg + '\n');
         await delay(300); // Пауза между репликами
       }
 
       if (node.isEnd) return;
 
-      // 2. Ждём ввод пользователя (асинхронно)
-      const userInput = await waitForDialogueInput();
-      const inputLower = userInput.toLowerCase();
+      // Лист без веток — только текст, без ожидания (иначе вечный цикл)
+      if (!node.branches.length) return;
 
-      // 3. Поиск ветки
-      let branch = node.branches.find(b => b.triggers.includes(inputLower));
-      if (!branch) branch = node.branches.find(b => b.triggers.includes('*'));
-
-      if (branch) {
-        await executeNode(branch.node);
-      } else {
+      // 2–3. Ждём ввод и ветвимся (без повторной печати всего узла при ошибке)
+      for (;;) {
+        const userInput = await waitForDialogueInput();
+        const inputLower = userInput.toLowerCase();
+        const branch = pickBranch(node.branches, inputLower);
+        if (branch) {
+          await executeNode(branch.node);
+          return;
+        }
         await typeText('Система не распознала ввод. Попробуйте снова.\n');
-        await executeNode(node); // Повторяем шаг
       }
     }
 
