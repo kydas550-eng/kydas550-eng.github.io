@@ -18,14 +18,19 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    #bg { position: fixed; inset: 0; background: url('https://github.com/kydas550-eng/kydas550-eng.github.io/blob/main/zg0r0v2va7fe1.jpeg') center/cover no-repeat; z-index: 1; transition: opacity 0.4s; }
+    /* 🖼️ Фоновое изображение (используется raw-ссылка для прямой загрузки) */
+    #bg { 
+      position: fixed; inset: 0; 
+      background: url('https://raw.githubusercontent.com/kydas550-eng/kydas550-eng.github.io/main/zg0r0v2va7fe1.jpeg') center/cover no-repeat; 
+      z-index: 1; transition: opacity 0.4s; 
+    }
     
     #terminal { display: none; position: fixed; inset: 0; z-index: 2; }
     
     .crt-screen {
       display: flex; flex-direction: column;
       width: 100%; height: 100%;
-      background: #020502; /* Тёмно-зелёный фон по умолчанию */
+      background: #020502;
       overflow: hidden;
       box-shadow: inset 0 0 100px rgba(0,0,0,0.85);
       border-radius: 12px;
@@ -36,16 +41,14 @@
 
     /* 📏 Сканлайны */
     .crt-screen::before {
-      content: "";
-      position: absolute; inset: 0;
+      content: ""; position: absolute; inset: 0;
       background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px);
       pointer-events: none; z-index: 10;
     }
 
     /* 🌑 Виньетка */
     .crt-screen::after {
-      content: "";
-      position: absolute; inset: 0;
+      content: ""; position: absolute; inset: 0;
       background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.7) 100%);
       pointer-events: none; z-index: 11;
     }
@@ -63,9 +66,7 @@
     #output::-webkit-scrollbar-thumb { background: #33ff33; }
 
     /* 💗 РОЗОВАЯ ТЕМА (Доступ разрешен) */
-    #terminal.pink-mode .crt-screen {
-      background: #050204; /* Тёмно-розовый фон */
-    }
+    #terminal.pink-mode .crt-screen { background: #050204; }
     #terminal.pink-mode #output,
     #terminal.pink-mode #cmd-input {
       color: #ff66b2;
@@ -74,6 +75,7 @@
     }
     #terminal.pink-mode #output::-webkit-scrollbar-thumb { background: #ff66b2; }
 
+    /* 📺 Шум */
     .noise {
       position: absolute; inset: 0;
       background: url("data:image/svg+xml;utf8,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -82,10 +84,7 @@
 
     #output { flex: 1; overflow-y: auto; white-space: pre-wrap; padding: 20px; line-height: 1.4; }
     #input-line { display: flex; align-items: center; padding: 0 20px 20px; }
-    #cmd-input { 
-      background: transparent; border: none; outline: none; 
-      font-family: inherit; font-size: inherit; flex: 1; 
-    }
+    #cmd-input { background: transparent; border: none; outline: none; font-family: inherit; font-size: inherit; flex: 1; }
 
     #output::-webkit-scrollbar { width: 6px; }
     #output::-webkit-scrollbar-track { background: #000; }
@@ -112,20 +111,18 @@
     const output = document.getElementById('output');
     const input = document.getElementById('cmd-input');
     
-    let terminalState = 'IDLE'; // IDLE, LOGIN, PASSWORD, ACTIVE
+    let terminalState = 'IDLE'; 
     let tempLogin = '';
-    // 🔑 Учётные данные
+    let dialogueActive = false; 
     const CREDS = { login: 'Ан-30', pass: '30001' };
+    const DIALOGUE_VARS = { reward: "Древний ключ активирован. Архивы разблокированы." };
 
     function activateTerminal() {
       if (terminalState !== 'IDLE') return;
       terminalState = 'LOGIN';
-      
-      // При запуске всегда зелёная тема
       term.classList.remove('pink-mode'); 
       
       if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-      
       bg.style.opacity = '0';
       setTimeout(() => {
         bg.style.display = 'none';
@@ -139,82 +136,159 @@
     // 📱 Только мобильные тапы (12 раз)
     let tapCount = 0, tapTimer = null;
     const TAP_LIMIT = 12, TAP_TIMEOUT = 2000;
-    
     bg.addEventListener('click', (e) => {
       if (!('ontouchstart' in window) && !navigator.maxTouchPoints) return;
       if (terminalState !== 'IDLE') return;
-
-      tapCount++;
-      clearTimeout(tapTimer);
+      tapCount++; clearTimeout(tapTimer);
       tapTimer = setTimeout(() => { tapCount = 0; }, TAP_TIMEOUT);
-      
-      if (tapCount === TAP_LIMIT) {
-        tapCount = 0;
-        activateTerminal();
-      }
+      if (tapCount === TAP_LIMIT) { tapCount = 0; activateTerminal(); }
     });
 
     // ⌨️ Обработка ввода
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const val = input.value.trim();
-        input.value = '';
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const val = input.value.trim();
+      input.value = '';
 
-        if (terminalState === 'LOGIN') {
-          tempLogin = val;
-          terminalState = 'PASSWORD';
-          input.type = 'password';
-          output.textContent += '\npassword: ';
-        } else if (terminalState === 'PASSWORD') {
-          if (tempLogin === CREDS.login && val === CREDS.pass) {
-            terminalState = 'ACTIVE';
-            input.type = 'text';
-            
-            // 🎨 Переключаем на РОЗОВЫЙ
-            term.classList.add('pink-mode');
-            
-            output.textContent += '\nACCESS GRANTED\n';
-            setTimeout(() => typeText('hi\n'), 500);
-          } else {
-            output.textContent += '\nACCESS DENIED\n';
-            tempLogin = '';
-            terminalState = 'LOGIN';
-            input.type = 'text';
-            
-            // 🎨 Возвращаем на ЗЕЛЁНЫЙ при ошибке
-            term.classList.remove('pink-mode');
-            
-            output.textContent += 'login: ';
-          }
-        } else if (terminalState === 'ACTIVE') {
-          output.textContent += `\n> ${val}\n`;
-          processCommand(val.toLowerCase());
+      if (terminalState === 'LOGIN') {
+        tempLogin = val; terminalState = 'PASSWORD';
+        input.type = 'password'; output.textContent += '\npassword: ';
+      } else if (terminalState === 'PASSWORD') {
+        if (tempLogin === CREDS.login && val === CREDS.pass) {
+          terminalState = 'ACTIVE'; input.type = 'text';
+          term.classList.add('pink-mode');
+          output.textContent += '\nACCESS GRANTED\n';
+          startDialogue(); // 🟢 Запуск сценария
+        } else {
+          output.textContent += '\nACCESS DENIED\n';
+          tempLogin = ''; terminalState = 'LOGIN';
+          input.type = 'text'; term.classList.remove('pink-mode');
+          output.textContent += 'login: ';
         }
-        input.focus();
+      } else if (terminalState === 'ACTIVE' && !dialogueActive) {
+        output.textContent += `\n> ${val}\n`;
+        processCommand(val.toLowerCase());
       }
+      input.focus();
     });
 
-    // ⌨️ Эффект печати
-    function typeText(text, cb) {
-      let i = 0;
-      const interval = setInterval(() => {
-        output.textContent += text[i];
-        output.scrollTop = output.scrollHeight;
-        i++;
-        if (i >= text.length) {
-          clearInterval(interval);
-          if (cb) cb();
-        }
-      }, 35);
+    // 🎬 ДВИЖОК ДИАЛОГОВ
+    async function startDialogue() {
+      dialogueActive = true;
+      try {
+        const res = await fetch('dialogue.txt');
+        if (!res.ok) throw new Error('Файл не найден');
+        const tree = parseDialogue(await res.text());
+        await runDialogueNode(tree);
+      } catch (err) {
+        console.warn('Диалог не загружен, используется fallback:', err);
+        await typeText('hi\n');
+        await typeText('Сценарий недоступен.\n');
+      }
+      dialogueActive = false;
+      terminalState = 'ACTIVE';
+      input.focus();
     }
 
-    // 🗃️ Логика команд
+    function parseDialogue(text) {
+      const lines = text.split('\n')
+        .map(l => l.replace(/\/\/.*$/, '').trim())
+        .filter(l => l.length > 0);
+
+      const root = { outputs: [], branches: [], isEnd: false };
+      const stack = [{ node: root, level: -1 }];
+
+      for (const line of lines) {
+        if (line === 'start:') continue;
+        const level = line.search(/\S/);
+        const content = line.trim();
+
+        while (stack.length > 1 && stack[stack.length-1].level >= level) stack.pop();
+        const current = stack[stack.length-1].node;
+
+        if (content.startsWith('bot:')) {
+          let val = content.slice(4).trim();
+          if (val.startsWith('(') && val.endsWith(')')) val = val.slice(1,-1).split(',').map(s=>s.trim());
+          current.outputs.push(val);
+        } else if (content.startsWith(':')) {
+          let val = content.slice(1).trim();
+          if (current.outputs.length > 0) {
+            const last = current.outputs[current.outputs.length-1];
+            current.outputs[current.outputs.length-1] = Array.isArray(last) ? val : last + '\n' + val;
+          }
+        } else if (content.startsWith('user:')) {
+          let raw = content.slice(5).trim();
+          let triggers = raw === '*' ? ['*'] : raw.slice(1,-1).split(',').map(s=>s.trim().toLowerCase());
+          const newNode = { outputs: [], branches: [], isEnd: false };
+          current.branches.push({ triggers, node: newNode });
+          stack.push({ node: newNode, level });
+        } else if (content === 'end') {
+          current.isEnd = true;
+        }
+      }
+      return root;
+    }
+
+    async function runDialogueNode(node) {
+      // 1. Вывод сообщений бота
+      for (let out of node.outputs) {
+        if (Array.isArray(out)) out = out[Math.floor(Math.random() * out.length)];
+        out = out.replace(/\{(\w+)\}/g, (_, k) => DIALOGUE_VARS[k] || `{${k}}`);
+        await typeText(out + '\n');
+      }
+
+      if (node.isEnd) return;
+
+      // 2. Ожидание ввода с приоритетом
+      return new Promise(resolve => {
+        const handler = async (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          const val = input.value.trim();
+          input.value = '';
+          const inputLower = val.toLowerCase();
+
+          let matchedBranch = null;
+
+          // 🔍 Приоритет: точные слова > *
+          for (const branch of node.branches) {
+            if (branch.triggers.includes(inputLower)) {
+              matchedBranch = branch; break;
+            }
+          }
+          if (!matchedBranch) matchedBranch = node.branches.find(b => b.triggers.includes('*'));
+
+          if (matchedBranch) {
+            input.removeEventListener('keydown', handler);
+            await runDialogueNode(matchedBranch.node);
+            resolve();
+          } else {
+            await typeText('Система не приняла ввод.\n');
+          }
+        };
+        input.addEventListener('keydown', handler);
+      });
+    }
+
+    // ⌨️ Асинхронная печать
+    function typeText(text) {
+      return new Promise(resolve => {
+        let i = 0;
+        const interval = setInterval(() => {
+          output.textContent += text[i];
+          output.scrollTop = output.scrollHeight;
+          i++;
+          if (i >= text.length) { clearInterval(interval); resolve(); }
+        }, 35);
+      });
+    }
+
+    // 🗃️ Обычные команды (после диалога)
     function processCommand(cmd) {
       const db = {
-        'help': 'Команды: help, status, matrix, clear',
+        'help': 'Команды: help, status, clear',
         'status': 'Система: ONLINE | Задержка: 12ms',
-        'matrix': 'Следуй за белым кроликом...',
         'clear': () => { output.textContent = ''; return ''; }
       };
       const res = typeof db[cmd] === 'function' ? db[cmd]() : (db[cmd] || 'Команда не распознана.');
@@ -224,9 +298,7 @@
     // 🛡️ Защита
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('keydown', e => {
-      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key.toUpperCase())) || (e.ctrlKey && e.key.toLowerCase() === 'u')) {
-        e.preventDefault();
-      }
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key.toUpperCase())) || (e.ctrlKey && e.key.toLowerCase() === 'u')) e.preventDefault();
     });
   </script>
 </body>
