@@ -83,6 +83,13 @@
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
+    #output a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      word-break: break-all;
+    }
+    #output .terminal-line { white-space: pre-wrap; }
     #output::-webkit-scrollbar {
       display: none;
     }
@@ -118,6 +125,52 @@
     const CREDS = { login: 'Ан-30', pass: '30001' };
     const DIALOGUE_VARS = { reward: "Древний ключ активирован. Архивы разблокированы." };
 
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Ссылки в тексте → безопасный HTML (http(s), t.me/…, telegram.me/…) */
+    function linkifyToHtml(raw) {
+      const re = /(https?:\/\/[^\s<]+)|(t\.me\/[^\s<]+)|(telegram\.me\/[^\s<]+)/gi;
+      let last = 0;
+      let out = '';
+      let m;
+      while ((m = re.exec(raw)) !== null) {
+        out += escapeHtml(raw.slice(last, m.index));
+        let href;
+        if (m[1]) href = m[1];
+        else if (m[2]) href = 'https://' + m[2];
+        else href = 'https://t.me/' + m[3].slice('telegram.me/'.length);
+        const label = m[0];
+        out += '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(label) + '</a>';
+        last = m.index + m[0].length;
+      }
+      out += escapeHtml(raw.slice(last));
+      return out;
+    }
+
+    function appendOutputPlain(text) {
+      output.appendChild(document.createTextNode(text));
+      output.scrollTop = output.scrollHeight;
+    }
+
+    /** Открыть чат/канал/бота внутри Telegram (Mini App), иначе обычный переход по ссылке */
+    output.addEventListener('click', (e) => {
+      const a = e.target.closest('a');
+      if (!a || !output.contains(a)) return;
+      const href = a.getAttribute('href');
+      if (!href) return;
+      try {
+        const u = new URL(href, window.location.href);
+        const h = u.hostname.toLowerCase().replace(/^www\./, '');
+        if (h !== 't.me' && h !== 'telegram.me') return;
+        if (!tg?.openTelegramLink) return;
+        e.preventDefault();
+        const openUrl = 'https://t.me' + u.pathname + u.search + u.hash;
+        tg.openTelegramLink(openUrl);
+      } catch (_) { /* оставляем поведение ссылки по умолчанию */ }
+    });
+
     // 🖱️ Активация терминала (12 тапов)
     function activateTerminal() {
       if (state !== 'IDLE') return;
@@ -131,7 +184,8 @@
         term.style.display = 'flex';
         input.type = 'text';
         input.focus();
-        output.textContent = 'login: ';
+        output.innerHTML = '';
+        appendOutputPlain('login: ');
       }, 400);
     }
 
@@ -156,23 +210,23 @@
         tempLogin = val;
         state = 'PASSWORD';
         input.type = 'password';
-        output.textContent += '\npassword: ';
+        appendOutputPlain('\npassword: ');
       } 
       else if (state === 'PASSWORD') {
         if (tempLogin === CREDS.login && val === CREDS.pass) {
           state = 'DIALOGUE';
           input.type = 'text';
           term.classList.add('pink-mode');
-          output.textContent += '\nACCESS GRANTED\n';
+          appendOutputPlain('\nACCESS GRANTED\n');
           // Небольшая задержка, чтобы сбросить буфер клавиатуры
           setTimeout(() => startDialogue(), 150);
         } else {
-          output.textContent += '\nACCESS DENIED\n';
+          appendOutputPlain('\nACCESS DENIED\n');
           tempLogin = '';
           state = 'LOGIN';
           input.type = 'text';
           term.classList.remove('pink-mode');
-          output.textContent += 'login: ';
+          appendOutputPlain('login: ');
         }
       } 
       else if (state === 'DIALOGUE') {
@@ -183,7 +237,7 @@
         }
       } 
       else if (state === 'COMMAND') {
-        output.textContent += `\n> ${val}\n`;
+        appendOutputPlain(`\n> ${val}\n`);
         processCommand(val.toLowerCase());
       }
       input.focus();
@@ -307,15 +361,28 @@
       return new Promise(res => setTimeout(res, ms));
     }
 
-    // ⌨️ Асинхронная печать
+    // ⌨️ Асинхронная печать + кликабельные ссылки после строки
     function typeText(text) {
       return new Promise(resolve => {
+        if (!text.length) {
+          resolve();
+          return;
+        }
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+        output.appendChild(line);
         let i = 0;
         const interval = setInterval(() => {
-          output.textContent += text[i];
+          if (i >= text.length) {
+            clearInterval(interval);
+            line.innerHTML = linkifyToHtml(text);
+            output.scrollTop = output.scrollHeight;
+            resolve();
+            return;
+          }
+          line.textContent = text.slice(0, i + 1);
           output.scrollTop = output.scrollHeight;
           i++;
-          if (i >= text.length) { clearInterval(interval); resolve(); }
         }, 30);
       });
     }
@@ -325,7 +392,7 @@
       const db = {
         'help': 'Команды: help, status, clear',
         'status': 'Система: ONLINE | Задержка: 12ms',
-        'clear': () => { output.textContent = ''; return ''; }
+        'clear': () => { output.innerHTML = ''; return ''; }
       };
       const res = typeof db[cmd] === 'function' ? db[cmd]() : (db[cmd] || 'Команда не распознана.');
       if (res) typeText(res + '\n');
