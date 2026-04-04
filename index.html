@@ -387,10 +387,21 @@
       });
     }
 
+    // 🗃️ Команда → другой HTML (файлы рядом с index.html на том же хосте)
+    const COMMAND_PAGES = {
+      // пример: ввод `panel` откроет panel.html
+       'alice': 'player.html',
+    };
+
     // 🗃️ Обычные команды (после диалога)
     function processCommand(cmd) {
+      const target = COMMAND_PAGES[cmd];
+      if (target) {
+        window.location.href = target;
+        return;
+      }
       const db = {
-        'help': 'Команды: help, status, clear',
+        'help': 'Команды: help, status, clear (+ страницы из COMMAND_PAGES)',
         'status': 'Система: ONLINE | Задержка: 12ms',
         'clear': () => { output.innerHTML = ''; return ''; }
       };
