@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WebApp</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&subset=cyrillic,latin&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+    body { 
+      font-family: 'JetBrains Mono', 'Courier New', 'Consolas', monospace; 
+      font-variant-ligatures: none;
+      -webkit-user-select: none; user-select: none; 
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #bg { position: fixed; inset: 0; background: url('https://images.unsplash.com/photo-1534972195531-d756b9bfa9f2?auto=format&fit=crop&w=1920&q=80') center/cover no-repeat; z-index: 1; transition: opacity 0.4s; }
+    
+    #terminal { display: none; position: fixed; inset: 0; z-index: 2; }
+    
+    .crt-screen {
+      display: flex; flex-direction: column;
+      width: 100%; height: 100%;
+      background: #0a0508;
+      overflow: hidden;
+      box-shadow: inset 0 0 100px rgba(0,0,0,0.85);
+      border-radius: 12px;
+      animation: crt-flicker 4s infinite alternate;
+      will-change: opacity;
+    }
+
+    .crt-screen::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px);
+      pointer-events: none; z-index: 10;
+    }
+
+    .crt-screen::after {
+      content: "";
+      position: absolute; inset: 0;
+      background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.7) 100%);
+      pointer-events: none; z-index: 11;
+    }
+
+    @keyframes crt-flicker {
+      0%, 100% { opacity: 1; } 25% { opacity: 0.98; } 50% { opacity: 0.99; } 75% { opacity: 0.97; }
+    }
+
+    .phosphor {
+      color: #ff66b2;
+      text-shadow: 0 0 5px rgba(255, 102, 178, 0.8), 0 0 12px rgba(255, 102, 178, 0.4);
+    }
+
+    .noise {
+      position: absolute; inset: 0;
+      background: url("image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: 0.03; mix-blend-mode: screen; pointer-events: none; z-index: 9;
+    }
+
+    #output { flex: 1; overflow-y: auto; white-space: pre-wrap; padding: 20px; line-height: 1.4; }
+    #input-line { display: flex; align-items: center; padding: 0 20px 20px; }
+    #cmd-input { 
+      background: transparent; border: none; outline: none; 
+      font-family: inherit; font-size: inherit; flex: 1; 
+      caret-color: #ff66b2;
+    }
+
+    #output::-webkit-scrollbar { width: 6px; }
+    #output::-webkit-scrollbar-track { background: #000; }
+    #output::-webkit-scrollbar-thumb { background: #ff66b2; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="bg"></div>
+  <div id="terminal">
+    <div class="crt-screen">
+      <div class="noise"></div>
+      <div id="output" class="phosphor"></div>
+      <div id="input-line">
+        <input type="text" id="cmd-input" autocomplete="off" spellcheck="false" autofocus class="phosphor">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const bg = document.getElementById('bg');
+    const term = document.getElementById('terminal');
+    const output = document.getElementById('output');
+    const input = document.getElementById('cmd-input');
+    
+    let terminalState = 'IDLE'; // IDLE, LOGIN, PASSWORD, ACTIVE
+    let tempLogin = '';
+    // 🔑 Учётные данные
+    const CREDS = { login: 'Ан-30', pass: '30001' };
+
+    function activateTerminal() {
+      if (terminalState !== 'IDLE') return;
+      terminalState = 'LOGIN';
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+      
+      bg.style.opacity = '0';
+      setTimeout(() => {
+        bg.style.display = 'none';
+        term.style.display = 'flex';
+        input.type = 'text';
+        input.focus();
+        output.textContent = 'login: ';
+      }, 400);
+    }
+
+    // 📱 Только мобильные тапы
+    let tapCount = 0, tapTimer = null;
+    const TAP_LIMIT = 12, TAP_TIMEOUT = 2000;
+    
+    bg.addEventListener('click', (e) => {
+      if (!('ontouchstart' in window) && !navigator.maxTouchPoints) return;
+      if (terminalState !== 'IDLE') return;
+
+      tapCount++;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => { tapCount = 0; }, TAP_TIMEOUT);
+      
+      if (tapCount === TAP_LIMIT) {
+        tapCount = 0;
+        activateTerminal();
+      }
+    });
+
+    // ⌨️ Обработка ввода
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = input.value.trim();
+        input.value = '';
+
+        if (terminalState === 'LOGIN') {
+          tempLogin = val;
+          terminalState = 'PASSWORD';
+          input.type = 'password'; // Маскируем ввод
+          output.textContent += '\npassword: ';
+        } else if (terminalState === 'PASSWORD') {
+          if (tempLogin === CREDS.login && val === CREDS.pass) {
+            terminalState = 'ACTIVE';
+            input.type = 'text';
+            output.textContent += '\nACCESS GRANTED\n';
+            setTimeout(() => typeText('hi\n'), 500);
+          } else {
+            output.textContent += '\nACCESS DENIED\n';
+            tempLogin = '';
+            terminalState = 'LOGIN';
+            input.type = 'text';
+            output.textContent += 'login: ';
+          }
+        } else if (terminalState === 'ACTIVE') {
+          output.textContent += `\n> ${val}\n`;
+          processCommand(val.toLowerCase());
+        }
+        input.focus();
+      }
+    });
+
+    // ⌨️ Эффект печати
+    function typeText(text, cb) {
+      let i = 0;
+      const interval = setInterval(() => {
+        output.textContent += text[i];
+        output.scrollTop = output.scrollHeight;
+        i++;
+        if (i >= text.length) {
+          clearInterval(interval);
+          if (cb) cb();
+        }
+      }, 35);
+    }
+
+    // 🗃️ Логика команд
+    function processCommand(cmd) {
+      const db = {
+        'help': 'Команды: help, status, matrix, clear',
+        'status': 'Система: ONLINE | Задержка: 12ms',
+        'matrix': 'Следуй за белым кроликом...',
+        'clear': () => { output.textContent = ''; return ''; }
+      };
+      const res = typeof db[cmd] === 'function' ? db[cmd]() : (db[cmd] || 'Команда не распознана.');
+      if (res) typeText(res + '\n');
+    }
+
+    // 🛡️ Защита
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key.toUpperCase())) || (e.ctrlKey && e.key.toLowerCase() === 'u')) {
+        e.preventDefault();
+      }
+    });
+  </script>
+</body>
+</html>
