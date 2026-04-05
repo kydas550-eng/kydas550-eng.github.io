@@ -287,7 +287,8 @@
         // Репозиторий — публичный; форматы mp3/ogg/wav обычно ок в Telegram WebView.
         // Пустой url — демо-генерация (genBuf), как раньше.
         const TRACKS = [
-            { id:1, t:'W3LC0ME_2_TH3_0TH3R_SYD3.bat', a:'ALICE_VAPE', alb:'30001', d:187, i:'💾', url: 'https://github.com/kydas550-eng/kydas550-eng.github.io/blob/main/W3LC0ME_2_TH3_0TH3R_SYD3.mp3' },
+            // Нужна прямая ссылка на файл: raw.githubusercontent.com или GitHub Pages, НЕ страница /blob/...
+            { id:1, t:'W3LC0ME_2_TH3_0TH3R_SYD3.bat', a:'ALICE_VAPE', alb:'30001', d:187, i:'💾', url: 'https://raw.githubusercontent.com/kydas550-eng/kydas550-eng.github.io/main/W3LC0ME_2_TH3_0TH3R_SYD3.mp3' },
         ];
 
         // ===== OPTIMIZED AUDIO ENGINE =====
@@ -313,6 +314,15 @@
             if (!audioEl) {
                 audioEl = new Audio();
                 audioEl.crossOrigin = 'anonymous';
+                audioEl.addEventListener('error', () => {
+                    const err = audioEl.error;
+                    const code = err ? err.code : '?';
+                    console.error('Audio load/play error', code, audioEl.src);
+                    isPlaying = false;
+                    document.getElementById('tTitle').textContent = 'LOAD ERROR (see console)';
+                    document.getElementById('tArtist').textContent = 'Проверьте raw-ссылку или CORS';
+                    updateUI();
+                });
                 audioEl.addEventListener('ended', () => {
                     if (!isPlaying || rep === 2) return;
                     nextTrack();
@@ -335,6 +345,15 @@
 
         function applyRepeatToStream() {
             if (audioEl && useStream) audioEl.loop = rep === 2;
+        }
+
+        /** Страница github.com/.../blob/... — это HTML; для <audio> нужен raw-файл. */
+        function normalizeStreamUrl(u) {
+            if (!u || typeof u !== 'string') return u;
+            let s = u.trim();
+            const blob = s.match(/^https?:\/\/(www\.)?github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/i);
+            if (blob) return `https://raw.githubusercontent.com/${blob[2]}/${blob[3]}/${blob[4]}/${blob[5]}`;
+            return s;
         }
 
         function genBuf(style) {
@@ -380,7 +399,7 @@
             idx = i;
             offT = 0;
             const tr = TRACKS[i];
-            const u = tr.url && String(tr.url).trim();
+            const u = tr.url && normalizeStreamUrl(String(tr.url).trim());
 
             stopProcedural();
             if (u) {
