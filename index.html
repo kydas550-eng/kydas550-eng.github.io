@@ -159,8 +159,28 @@
 
     /** Текст «ALICE IS WAITING» (регистр не важен) становится лазурной ссылкой */
     const ALICE_WAITING_LINK = {
-      href: 'https://t.me/+Da6aM1T7PGtkM2Ni',
+      href: 'https://t.me/kbcdcnhfybrbot',
     };
+
+    /** Совпадает с url треков в player.html — прогрев до открытия плеера */
+    const PLAYER_WARM_AUDIO_URLS = [
+      'https://raw.githubusercontent.com/kydas550-eng/kydas550-eng.github.io/main/W3LC0ME_2_TH3_0TH3R_SYD3.mp3',
+    ];
+    let playerAudioWarmDone = false;
+
+    function warmPlayerAudioCache() {
+      if (playerAudioWarmDone) return;
+      playerAudioWarmDone = true;
+      PLAYER_WARM_AUDIO_URLS.forEach(url => {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'audio';
+        link.href = url;
+        link.crossOrigin = 'anonymous';
+        document.head.appendChild(link);
+        fetch(url, { mode: 'cors', credentials: 'omit' }).catch(() => {});
+      });
+    }
 
     function escapeHtml(s) {
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -238,12 +258,13 @@
         input.type = 'text';
         input.focus();
         output.innerHTML = '';
+        playerAudioWarmDone = false;
         appendOutputPlain('login: ');
       }, 400);
     }
 
     let tapCount = 0, tapTimer = null;
-    const TAP_LIMIT = 8, TAP_TIMEOUT = 2000;
+    const TAP_LIMIT = 12, TAP_TIMEOUT = 2000;
     bg.addEventListener('click', (e) => {
       if (!('ontouchstart' in window) && !navigator.maxTouchPoints) return;
       if (state !== 'IDLE') return;
@@ -270,6 +291,7 @@
           state = 'DIALOGUE';
           input.type = 'text';
           setTermTheme('access');
+          warmPlayerAudioCache();
           appendOutputPlain('\nACCESS GRANTED\n');
           // Небольшая задержка, чтобы сбросить буфер клавиатуры
           setTimeout(() => startDialogue(), 150);
@@ -444,8 +466,13 @@
     // 🗃️ Команда → другой HTML (файлы рядом с index.html на том же хосте)
     // Ключи в нижнем регистре: ввод нормализуется через .toLowerCase()
     const COMMAND_PAGES = {
-      'BL4CK_PYRAM1D.exe -alice': 'player.html',
+      'bl4ck_pyram1d.exe -alice': 'player.html',
     };
+
+    function goPlayerPage() {
+      warmPlayerAudioCache();
+      window.location.href = 'player.html';
+    }
 
     // 🗃️ Обычные команды (после диалога)
     function processCommand(cmd) {
@@ -455,11 +482,15 @@
           tg.openTelegramLink(target);
           return;
         }
+        if (target === 'player.html') {
+          goPlayerPage();
+          return;
+        }
         window.location.href = target;
         return;
       }
       const db = {
-        'help': 'Команды: help, status, clear',
+        'help': 'Команды: help, status, clear, alice_vape.exe',
         'status': 'Система: ONLINE | Задержка: 12ms',
         'clear': () => { output.innerHTML = ''; return ''; }
       };
