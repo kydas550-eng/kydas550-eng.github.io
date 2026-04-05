@@ -159,7 +159,7 @@
 
     /** Текст «ALICE IS WAITING» (регистр не важен) становится лазурной ссылкой */
     const ALICE_WAITING_LINK = {
-      href: 'https://t.me/kbcdcnhfybrbot',
+      href: 'https://t.me/+Da6aM1T7PGtkM2Ni',
     };
 
     function escapeHtml(s) {
@@ -243,7 +243,7 @@
     }
 
     let tapCount = 0, tapTimer = null;
-    const TAP_LIMIT = 12, TAP_TIMEOUT = 2000;
+    const TAP_LIMIT = 8, TAP_TIMEOUT = 2000;
     bg.addEventListener('click', (e) => {
       if (!('ontouchstart' in window) && !navigator.maxTouchPoints) return;
       if (state !== 'IDLE') return;
