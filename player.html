@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TERM://PLAYER v2.0</title>
+    <title>TERM://ALICE VAPE v2.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=VT323&display=swap');
@@ -280,20 +280,21 @@
         if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#0a0a0a'); }
 
         // ===== TRACKS =====
+        // url — прямая ссылка на аудиофайл в репозитории (или CDN).
+        // Примеры:
+        //   https://raw.githubusercontent.com/USER/REPO/main/music/track.mp3
+        //   https://cdn.jsdelivr.net/gh/USER/REPO@main/music/track.mp3
+        // Репозиторий — публичный; форматы mp3/ogg/wav обычно ок в Telegram WebView.
+        // Пустой url — демо-генерация (genBuf), как раньше.
         const TRACKS = [
-            { id:1, t:'NEON_DRIFT.exe', a:'SYNTH_WAVE', alb:'cyberpunk_v1', d:187, i:'⚡' },
-            { id:2, t:'MATRIX_RAIN.wav', a:'DIGITAL_GHOST', alb:'mainframe', d:214, i:'🌧' },
-            { id:3, t:'BYTECODE.mp3', a:'NULL_PTR', alb:'mem_leak', d:198, i:'💾' },
-            { id:4, t:'FIREWALL.ogg', a:'ROOT_ACCESS', alb:'zero_day', d:176, i:'🔥' },
-            { id:5, t:'QUANTUM.flac', a:'QUBIT_9', alb:'superpos', d:243, i:'⚛' },
-            { id:6, t:'SUDO_PLAY.sh', a:'BASH_BRO', alb:'root_priv', d:165, i:'🐧' },
-            { id:7, t:'KERNEL_PANIC.mp3', a:'SEGFAULT', alb:'bsod', d:201, i:'💀' },
-            { id:8, t:'DARK_FIBER.wav', a:'PACKET_LOSS', alb:'layer1', d:228, i:'🌑' }
+            { id:1, t:'W3LC0ME_2_TH3_0TH3R_SYD3.bat', a:'ALICE_VAPE', alb:'30001', d:187, i:'💾', url: 'https://github.com/kydas550-eng/kydas550-eng.github.io/blob/main/W3LC0ME_2_TH3_0TH3R_SYD3.mp3' },
         ];
 
         // ===== OPTIMIZED AUDIO ENGINE =====
-        // Uses short 4s buffer + loop. Generation takes ~2ms instead of ~2000ms.
+        // Процедурный режим: короткий буфер + loop. URL-режим: HTMLAudioElement → Web Audio (громкость).
         let ctx, master, src;
+        let audioEl = null, mediaConnected = false;
+        let useStream = false;
         let isPlaying = false, idx = 0, loopDur = 4.0, startT = 0, offT = 0;
         let shuf = false, rep = 0; // 0:off, 1:all, 2:one
 
@@ -305,6 +306,35 @@
                 master.gain.value = 0.8;
             }
             if (ctx.state === 'suspended') ctx.resume();
+        }
+
+        function ensureStreamAudio() {
+            initAudio();
+            if (!audioEl) {
+                audioEl = new Audio();
+                audioEl.crossOrigin = 'anonymous';
+                audioEl.addEventListener('ended', () => {
+                    if (!isPlaying || rep === 2) return;
+                    nextTrack();
+                });
+                audioEl.addEventListener('loadedmetadata', () => {
+                    const tr = TRACKS[idx];
+                    if (tr && audioEl.duration && isFinite(audioEl.duration) && (!tr.d || tr.d <= 0))
+                        tr.d = Math.round(audioEl.duration);
+                    updateUI();
+                    document.getElementById('qMeta').textContent = `${TRACKS.length} tracks | ${fmtT(TRACKS.reduce((a, b) => a + (b.d || 0), 0))}`;
+                });
+            }
+            if (!mediaConnected) {
+                try {
+                    ctx.createMediaElementSource(audioEl).connect(master);
+                    mediaConnected = true;
+                } catch (e) { /* уже подключён */ }
+            }
+        }
+
+        function applyRepeatToStream() {
+            if (audioEl && useStream) audioEl.loop = rep === 2;
         }
 
         function genBuf(style) {
@@ -335,37 +365,85 @@
             return buf;
         }
 
+        function stopProcedural() {
+            if (src) { try { src.stop(); } catch (e) {} src = null; }
+        }
+
+        function detachStream() {
+            if (!audioEl) return;
+            audioEl.pause();
+            audioEl.removeAttribute('src');
+            audioEl.load();
+        }
+
         function playTrack(i) {
+            idx = i;
+            offT = 0;
+            const tr = TRACKS[i];
+            const u = tr.url && String(tr.url).trim();
+
+            stopProcedural();
+            if (u) {
+                useStream = true;
+                ensureStreamAudio();
+                audioEl.loop = rep === 2;
+                audioEl.src = u;
+                audioEl.play().then(() => {
+                    isPlaying = true;
+                    updateUI();
+                }).catch(err => {
+                    console.error(err);
+                    isPlaying = false;
+                    updateUI();
+                });
+                return;
+            }
+
+            if (useStream) detachStream();
+            useStream = false;
             initAudio();
-            idx = i; offT = 0;
-            stopAudio();
             src = ctx.createBufferSource();
-            src.buffer = genBuf(TRACKS[i].t.split('.')[0]);
+            src.buffer = genBuf(tr.t.split('.')[0]);
             src.loop = true;
             src.connect(master);
-            src.onended = () => isPlaying && nextTrack();
+            src.onended = () => isPlaying && rep !== 2 && nextTrack();
             src.start(0, offT);
             startT = ctx.currentTime - offT;
             isPlaying = true;
             updateUI();
         }
 
-        function stopAudio() {
-            if (src) { try { src.stop(); } catch(e){} src = null; }
-        }
-
         function togglePlay() {
+            const tr = TRACKS[idx];
+            const u = tr.url && String(tr.url).trim();
+
+            if (u) {
+                ensureStreamAudio();
+                if (!isPlaying) {
+                    if (!audioEl.currentSrc) {
+                        playTrack(idx);
+                        return;
+                    }
+                    audioEl.play().then(() => { isPlaying = true; updateUI(); }).catch(() => updateUI());
+                } else {
+                    audioEl.pause();
+                    isPlaying = false;
+                    updateUI();
+                }
+                return;
+            }
+
             if (!ctx) playTrack(idx);
             else if (isPlaying) {
                 offT = ctx.currentTime - startT;
-                stopAudio();
+                stopProcedural();
                 isPlaying = false;
             } else {
                 src = ctx.createBufferSource();
-                src.buffer = genBuf(TRACKS[idx].t.split('.')[0]);
+                src.buffer = genBuf(tr.t.split('.')[0]);
                 src.loop = true;
                 src.connect(master);
-                src.onended = () => isPlaying && nextTrack();
+                src.onended = () => isPlaying && rep !== 2 && nextTrack();
                 src.start(0, offT);
                 startT = ctx.currentTime - offT;
                 isPlaying = true;
@@ -374,21 +452,42 @@
         }
 
         function nextTrack() {
-            playTrack(shuf ? (idx + Math.floor(Math.random()*(TRACKS.length-1)) + 1) % TRACKS.length : (idx + 1) % TRACKS.length);
+            const n = shuf
+                ? (idx + 1 + Math.floor(Math.random() * (TRACKS.length - 1))) % TRACKS.length
+                : (idx + 1) % TRACKS.length;
+            playTrack(n);
         }
         function prevTrack() {
-            if (offT > 3) { offT = 0; togglePlay(); togglePlay(); }
-            else playTrack((idx - 1 + TRACKS.length) % TRACKS.length);
+            const tr = TRACKS[idx];
+            const u = tr.url && String(tr.url).trim();
+            if (u && audioEl && audioEl.currentTime > 3) {
+                audioEl.currentTime = 0;
+                return;
+            }
+            if (!u && offT > 3) {
+                offT = 0;
+                togglePlay();
+                togglePlay();
+                return;
+            }
+            playTrack((idx - 1 + TRACKS.length) % TRACKS.length);
         }
 
         function seek(f) {
+            const tr = TRACKS[idx];
+            const u = tr.url && String(tr.url).trim();
+            if (u && audioEl && audioEl.duration && isFinite(audioEl.duration)) {
+                audioEl.currentTime = Math.max(0, Math.min(1, f)) * audioEl.duration;
+                return;
+            }
             offT = f * loopDur;
-            if (isPlaying) {
-                stopAudio();
+            if (isPlaying && !u) {
+                stopProcedural();
                 src = ctx.createBufferSource();
-                src.buffer = genBuf(TRACKS[idx].t.split('.')[0]);
-                src.loop = true; src.connect(master);
-                src.onended = () => isPlaying && nextTrack();
+                src.buffer = genBuf(tr.t.split('.')[0]);
+                src.loop = true;
+                src.connect(master);
+                src.onended = () => isPlaying && rep !== 2 && nextTrack();
                 src.start(0, offT);
                 startT = ctx.currentTime - offT;
             }
@@ -397,16 +496,31 @@
         // ===== UI & OPTIMIZATIONS =====
         let lastUI = 0;
         function updateProgress(now) {
-            if (!isPlaying) { requestAnimationFrame(updateProgress); return; }
+            const tr = TRACKS[idx];
+            const u = tr && tr.url && String(tr.url).trim();
+
+            if (isPlaying && u && audioEl && audioEl.duration && isFinite(audioEl.duration)) {
+                const pct = Math.min(audioEl.currentTime / audioEl.duration, 1);
+                if (now - lastUI > 32) {
+                    document.getElementById('progFill').style.transform = `scaleX(${pct})`;
+                    document.getElementById('cTime').textContent = fmtT(audioEl.currentTime);
+                    document.getElementById('tTime').textContent = fmtT(audioEl.duration);
+                    document.getElementById('fCmd').textContent = `play --track=${idx + 1} ${isPlaying ? '--run' : '--halt'}`;
+                    lastUI = now;
+                }
+                requestAnimationFrame(updateProgress);
+                return;
+            }
+
+            if (!isPlaying || !ctx) { requestAnimationFrame(updateProgress); return; }
             const elapsed = (ctx.currentTime - startT) % loopDur;
             const pct = Math.min(elapsed / loopDur, 1);
-            
-            // Throttle DOM updates to ~30fps
+
             if (now - lastUI > 32) {
                 document.getElementById('progFill').style.transform = `scaleX(${pct})`;
-                document.getElementById('cTime').textContent = fmtT(elapsed + Math.floor(offT/loopDur)*loopDur);
-                document.getElementById('tTime').textContent = fmtT(TRACKS[idx].d);
-                document.getElementById('fCmd').textContent = `play --track=${idx+1} ${isPlaying?'--run':'--halt'}`;
+                document.getElementById('cTime').textContent = fmtT(elapsed + Math.floor(offT / loopDur) * loopDur);
+                document.getElementById('tTime').textContent = fmtT(tr.d || 0);
+                document.getElementById('fCmd').textContent = `play --track=${idx + 1} ${isPlaying ? '--run' : '--halt'}`;
                 lastUI = now;
             }
             requestAnimationFrame(updateProgress);
@@ -443,7 +557,7 @@
             TRACKS.forEach((tr,i) => {
                 const li = document.createElement('li');
                 li.className = 't-item' + (i===idx?' active':'');
-                li.innerHTML = `<span class="t-num">${String(i+1).padStart(2,'0')}</span><div class="t-info"><div class="t-title">${tr.t}</div><div class="t-artist">${tr.a}</div></div><span class="t-dur">${fmtT(tr.d)}</span>`;
+                li.innerHTML = `<span class="t-num">${String(i+1).padStart(2,'0')}</span><div class="t-info"><div class="t-title">${tr.t}</div><div class="t-artist">${tr.a}</div></div><span class="t-dur">${tr.d ? fmtT(tr.d) : '—'}</span>`;
                 li.onclick = () => playTrack(i);
                 l.appendChild(li);
             });
@@ -536,7 +650,12 @@
         };
         document.getElementById('vol').oninput = e => { if(master) master.gain.value = e.target.value/100; };
         document.getElementById('shufBtn').onclick = function() { shuf=!shuf; this.classList.toggle('active',shuf); };
-        document.getElementById('repBtn').onclick = function() { rep=(rep+1)%3; this.textContent=rep===2?'⟳¹':'⟳'; this.classList.toggle('active',rep>0); };
+        document.getElementById('repBtn').onclick = function() {
+            rep = (rep + 1) % 3;
+            this.textContent = rep === 2 ? '⟳¹' : '⟳';
+            this.classList.toggle('active', rep > 0);
+            applyRepeatToStream();
+        };
 
         // ===== CLOCK =====
         setInterval(() => { const n=new Date(); document.getElementById('fClock').textContent = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`; }, 1000);
