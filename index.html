@@ -55,14 +55,24 @@
       0%, 100% { opacity: 1; } 25% { opacity: 0.98; } 50% { opacity: 0.99; } 75% { opacity: 0.97; }
     }
 
-    #output, #cmd-input {
+    /* Цвет терминала: логин/пароль → доступ → после VERIFIED */
+    #terminal[data-theme="login"] .crt-screen { background: #050505; }
+    #terminal[data-theme="login"] #output,
+    #terminal[data-theme="login"] #cmd-input {
+      color: #f0f0f0;
+      text-shadow: 0 0 6px rgba(255, 255, 255, 0.35), 0 0 16px rgba(220, 220, 255, 0.12);
+      caret-color: #ffffff;
+    }
+    #terminal[data-theme="access"] .crt-screen { background: #020502; }
+    #terminal[data-theme="access"] #output,
+    #terminal[data-theme="access"] #cmd-input {
       color: #33ff33;
       text-shadow: 0 0 5px rgba(51, 255, 51, 0.8), 0 0 12px rgba(51, 255, 51, 0.4);
       caret-color: #33ff33;
     }
-    #terminal.pink-mode .crt-screen { background: #050204; }
-    #terminal.pink-mode #output,
-    #terminal.pink-mode #cmd-input {
+    #terminal[data-theme="verified"] .crt-screen { background: #050204; }
+    #terminal[data-theme="verified"] #output,
+    #terminal[data-theme="verified"] #cmd-input {
       color: #ff66b2;
       text-shadow: 0 0 5px rgba(255, 102, 178, 0.8), 0 0 12px rgba(255, 102, 178, 0.4);
       caret-color: #ff66b2;
@@ -117,7 +127,7 @@
 </head>
 <body>
   <div id="bg"></div>
-  <div id="terminal">
+  <div id="terminal" data-theme="login">
     <div class="crt-screen">
       <div class="noise"></div>
       <div id="output"></div>
@@ -135,6 +145,10 @@
     const term = document.getElementById('terminal');
     const output = document.getElementById('output');
     const input = document.getElementById('cmd-input');
+
+    function setTermTheme(theme) {
+      term.dataset.theme = theme;
+    }
     
     // 🎛️ Состояния системы
     let state = 'IDLE'; // IDLE, LOGIN, PASSWORD, DIALOGUE, COMMAND
@@ -145,7 +159,7 @@
 
     /** Текст «ALICE IS WAITING» (регистр не важен) становится лазурной ссылкой */
     const ALICE_WAITING_LINK = {
-      href: 'https://t.me/+Da6aM1T7PGtkM2Ni',
+      href: 'https://t.me/kbcdcnhfybrbot',
     };
 
     function escapeHtml(s) {
@@ -214,8 +228,8 @@
     function activateTerminal() {
       if (state !== 'IDLE') return;
       state = 'LOGIN';
-      term.classList.remove('pink-mode'); 
-      
+      setTermTheme('login');
+
       if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
       bg.style.opacity = '0';
       setTimeout(() => {
@@ -229,7 +243,7 @@
     }
 
     let tapCount = 0, tapTimer = null;
-    const TAP_LIMIT = 8, TAP_TIMEOUT = 2000;
+    const TAP_LIMIT = 12, TAP_TIMEOUT = 2000;
     bg.addEventListener('click', (e) => {
       if (!('ontouchstart' in window) && !navigator.maxTouchPoints) return;
       if (state !== 'IDLE') return;
@@ -255,7 +269,7 @@
         if (tempLogin === CREDS.login && val === CREDS.pass) {
           state = 'DIALOGUE';
           input.type = 'text';
-          term.classList.add('pink-mode');
+          setTermTheme('access');
           appendOutputPlain('\nACCESS GRANTED\n');
           // Небольшая задержка, чтобы сбросить буфер клавиатуры
           setTimeout(() => startDialogue(), 150);
@@ -264,7 +278,7 @@
           tempLogin = '';
           state = 'LOGIN';
           input.type = 'text';
-          term.classList.remove('pink-mode');
+          setTermTheme('login');
           appendOutputPlain('login: ');
         }
       } 
@@ -415,6 +429,7 @@
           if (i >= text.length) {
             clearInterval(interval);
             line.innerHTML = wrapAliceWaitingLink(linkifyToHtml(text));
+            if (/\bVERIFIED\b/i.test(text)) setTermTheme('verified');
             output.scrollTop = output.scrollHeight;
             resolve();
             return;
@@ -427,8 +442,9 @@
     }
 
     // 🗃️ Команда → другой HTML (файлы рядом с index.html на том же хосте)
+    // Ключи в нижнем регистре: ввод нормализуется через .toLowerCase()
     const COMMAND_PAGES = {
-      'ALICE_VAPE.EXE': 'player.html',
+      'alice_vape.exe': 'player.html',
     };
 
     // 🗃️ Обычные команды (после диалога)
@@ -443,7 +459,7 @@
         return;
       }
       const db = {
-        'help': 'Команды: help, status, clear, player',
+        'help': 'Команды: help, status, clear, alice_vape.exe',
         'status': 'Система: ONLINE | Задержка: 12ms',
         'clear': () => { output.innerHTML = ''; return ''; }
       };
