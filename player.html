@@ -105,24 +105,15 @@
             pointer-events: none;
         }
         .cover-img.is-visible { opacity: 1; }
-        .vinyl {
-            width: 180px; height: 180px; border-radius: 50%;
-            background: radial-gradient(circle, #111 12%, var(--green-dark) 12.5%, var(--green-dark) 14%, #222 14.5%, #1a1a1a 100%);
-            box-shadow: 0 0 15px rgba(0,255,65,0.15);
-            display: flex; align-items: center; justify-content: center;
-            transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
-            will-change: transform;
+        .art-container.has-cover .art-placeholder { display: none !important; }
+        .art-placeholder {
             position: relative; z-index: 1;
+            font-size: clamp(48px, 22vw, 96px);
+            line-height: 1;
+            opacity: 0.4;
+            filter: drop-shadow(0 0 12px var(--green-glow));
+            user-select: none;
         }
-        .art-container.has-cover .vinyl {
-            position: absolute;
-            bottom: 10px; right: 10px;
-            width: 92px; height: 92px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.55);
-        }
-        .vinyl.spinning { animation: spin 3s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .vinyl-hole { width: 10px; height: 10px; background: var(--bg); border-radius: 50%; border: 1px solid var(--green-dark); }
 
         /* EQ: GPU-accelerated scaleY */
         .eq-bars { display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 32px; margin: 12px 0; }
@@ -233,12 +224,19 @@
 
     <div class="boot-screen" id="boot">
         <div class="boot-ascii">
-   █████╗ ██╗     ██╗ ██████╗███████╗ · ██╗   ██╗
-  ██╔══██╗██║     ██║██╔════╝██╔════╝ · ██║   ██║
-  ███████║██║     ██║██║     █████╗   · ██║   ██║
-  ██╔══██║██║     ██║██║     ██╔══╝   · ╚██╗ ██╔╝
-  ██║  ██║███████╗██║╚██████╗███████╗ ·  ╚████╔╝
-  ╚═╝  ╚═╝╚══════╝╚═╝ ╚═════╝╚══════╝ ·   ╚═══╝
+ ██████╗ ██╗     ███╗██╗ ██████╗██╗  ██╗
+ ██╔══██╗██║     ██╔╝██║██╔════╝██║ ██╔╝
+ ██████╔╝██║    ███████║██║     █████╔╝
+ ██╔══██╗██║    ╚════██║██║     ██╔═██╗
+ ██████╔╝███████╗    ██║╚██████╗██║  ██╗
+ ╚═════╝ ╚══════╝    ╚═╝ ╚═════╝╚═╝  ╚═╝
+ ░▒▓══════════ BL4CK △ PYRAM1D ══════════▓▒░
+ ██████╗ ██╗   ██╗██████╗  █████╗ ███╗   ███╗██╗██████╗
+ ██╔══██╗╚██╗ ██╔╝██╔══██╗██╔══██╗████╗ ████║██║██╔══██╗
+ ██████╔╝ ╚████╔╝ ██████╔╝███████║██╔████╔██║██║██║  ██║
+ ██╔═══╝   ╚██╔╝  ██╔══██╗██╔══██║██║╚██╔╝██║██║██║  ██║
+ ██║        ██║   ██║  ██║██║  ██║██║ ╚═╝ ██║██║██████╔╝
+ ╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═════╝
         </div>
         <div class="boot-text" id="bootText"></div>
     </div>
@@ -262,7 +260,7 @@
             <div class="view active" id="v-np">
                 <div class="art-container" id="artContainer">
                     <img class="cover-img" id="coverImg" alt="" decoding="async" width="512" height="512">
-                    <div class="vinyl" id="vinyl"><div class="vinyl-hole"></div></div>
+                    <div class="art-placeholder" id="artPlaceholder"><span id="placeholderIcon">♫</span></div>
                 </div>
                 <div class="eq-bars" id="eq"></div>
                 <div class="track-info">
@@ -308,7 +306,6 @@
                 </div>
                 <div class="set-group"><div class="set-title">⌘ DISPLAY</div>
                     <div class="set-row"><span class="set-label">Matrix Rain</span><div class="toggle" id="tMatrix"></div></div>
-                    <div class="set-row"><span class="set-label">Vinyl Anim</span><div class="toggle on" id="tVinyl"></div></div>
                 </div>
             </div>
         </div>
@@ -612,11 +609,6 @@
 
         function fmtT(s) { const m=Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
 
-        function syncVinylVisibility() {
-            const on = document.getElementById('tVinyl').classList.contains('on');
-            document.getElementById('vinyl').style.display = on ? 'flex' : 'none';
-        }
-
         function applyTrackArt(tr) {
             const artContainer = document.getElementById('artContainer');
             const coverImg = document.getElementById('coverImg');
@@ -667,7 +659,8 @@
                 mIcon.textContent = tr.i || '♫';
             }
 
-            syncVinylVisibility();
+            const ph = document.getElementById('placeholderIcon');
+            if (ph) ph.textContent = tr.i || '♫';
         }
 
         function updateUI() {
@@ -681,8 +674,7 @@
             document.getElementById('mTitle').textContent = tr.t;
             document.getElementById('mArtist').textContent = tr.a;
             applyTrackArt(tr);
-            document.getElementById('vinyl').classList.toggle('spinning', isPlaying);
-            
+
             // EQ
             document.querySelectorAll('.eq-bar').forEach((b,i) => {
                 b.classList.toggle('active', isPlaying);
@@ -807,10 +799,6 @@
                 else if (t === 'pink') tg.setHeaderColor('#140810');
                 else tg.setHeaderColor('#0a0a0a');
             }
-        };
-        document.getElementById('tVinyl').onclick = function() {
-            this.classList.toggle('on');
-            syncVinylVisibility();
         };
 
         // ===== NAV =====
