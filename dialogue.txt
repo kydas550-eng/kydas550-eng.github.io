@@ -8,6 +8,6 @@ start:
     user: (2332, 23:32)
         bot: VERIFIED.
         bot: SIG 2332 CONFIRMED
-        bot: ALICE IS WAITING...
-        bot: https://t.me/+Da6aM1T7PGtkM2Ni
         bot: WELCOME_TO_THE_OTHER_SIDE
+        bot: ALICE IS WAITING...
+
