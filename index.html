@@ -89,6 +89,24 @@
       text-underline-offset: 2px;
       word-break: break-all;
     }
+    /* Фраза «ALICE IS WAITING» как ссылка — лазурь, поверх розового режима тоже */
+    #output a.alice-waiting-link {
+      color: #2ecbff;
+      text-shadow: 0 0 10px rgba(46, 203, 255, 0.8), 0 0 24px rgba(0, 160, 210, 0.45);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(46, 203, 255, 0.55);
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      word-break: normal;
+      cursor: pointer;
+    }
+    #output a.alice-waiting-link:hover,
+    #output a.alice-waiting-link:focus-visible {
+      color: #9aebff;
+      border-bottom-color: #9aebff;
+      text-shadow: 0 0 14px rgba(154, 235, 255, 0.9), 0 0 28px rgba(46, 203, 255, 0.5);
+      outline: none;
+    }
     #output .terminal-line { white-space: pre-wrap; }
     #output::-webkit-scrollbar {
       display: none;
@@ -125,6 +143,11 @@
     const CREDS = { login: 'Ан-30', pass: '30001' };
     const DIALOGUE_VARS = { reward: "Древний ключ активирован. Архивы разблокированы." };
 
+    /** Текст «ALICE IS WAITING» (регистр не важен) становится лазурной ссылкой */
+    const ALICE_WAITING_LINK = {
+      href: 'https://t.me/kbcdcnhfybrbot',
+    };
+
     function escapeHtml(s) {
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
@@ -149,26 +172,42 @@
       return out;
     }
 
+    function escapeAttr(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    function wrapAliceWaitingLink(html) {
+      const href = escapeAttr(ALICE_WAITING_LINK.href);
+      return html.replace(/ALICE\s+IS\s+WAITING/gi, (m) =>
+        '<a class="alice-waiting-link" href="' + href + '">' + escapeHtml(m) + '</a>');
+    }
+
     function appendOutputPlain(text) {
       output.appendChild(document.createTextNode(text));
       output.scrollTop = output.scrollHeight;
+    }
+
+    function maybeOpenTelegramLink(anchor, e) {
+      const href = anchor.getAttribute('href');
+      if (!href) return false;
+      try {
+        const u = new URL(href, window.location.href);
+        const h = u.hostname.toLowerCase().replace(/^www\./, '');
+        if (h !== 't.me' && h !== 'telegram.me') return false;
+        if (!tg?.openTelegramLink) return false;
+        e.preventDefault();
+        tg.openTelegramLink('https://t.me' + u.pathname + u.search + u.hash);
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
     /** Открыть чат/канал/бота внутри Telegram (Mini App), иначе обычный переход по ссылке */
     output.addEventListener('click', (e) => {
       const a = e.target.closest('a');
       if (!a || !output.contains(a)) return;
-      const href = a.getAttribute('href');
-      if (!href) return;
-      try {
-        const u = new URL(href, window.location.href);
-        const h = u.hostname.toLowerCase().replace(/^www\./, '');
-        if (h !== 't.me' && h !== 'telegram.me') return;
-        if (!tg?.openTelegramLink) return;
-        e.preventDefault();
-        const openUrl = 'https://t.me' + u.pathname + u.search + u.hash;
-        tg.openTelegramLink(openUrl);
-      } catch (_) { /* оставляем поведение ссылки по умолчанию */ }
+      maybeOpenTelegramLink(a, e);
     });
 
     // 🖱️ Активация терминала (12 тапов)
@@ -375,7 +414,7 @@
         const interval = setInterval(() => {
           if (i >= text.length) {
             clearInterval(interval);
-            line.innerHTML = linkifyToHtml(text);
+            line.innerHTML = wrapAliceWaitingLink(linkifyToHtml(text));
             output.scrollTop = output.scrollHeight;
             resolve();
             return;
@@ -389,19 +428,22 @@
 
     // 🗃️ Команда → другой HTML (файлы рядом с index.html на том же хосте)
     const COMMAND_PAGES = {
-      // пример: ввод `panel` откроет panel.html
-       'ALICE_VAPE.exe': 'player.html',
+      'player': 'player.html',
     };
 
     // 🗃️ Обычные команды (после диалога)
     function processCommand(cmd) {
       const target = COMMAND_PAGES[cmd];
       if (target) {
+        if (/^https:\/\/t\.me\//i.test(target) && tg?.openTelegramLink) {
+          tg.openTelegramLink(target);
+          return;
+        }
         window.location.href = target;
         return;
       }
       const db = {
-        'help': 'Команды: help, status, clear (+ страницы из COMMAND_PAGES)',
+        'help': 'Команды: help, status, clear, player',
         'status': 'Система: ONLINE | Задержка: 12ms',
         'clear': () => { output.innerHTML = ''; return ''; }
       };
