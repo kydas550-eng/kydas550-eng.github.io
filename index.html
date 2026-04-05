@@ -444,7 +444,7 @@
     // 🗃️ Команда → другой HTML (файлы рядом с index.html на том же хосте)
     // Ключи в нижнем регистре: ввод нормализуется через .toLowerCase()
     const COMMAND_PAGES = {
-      'alice_vape.exe': 'player.html',
+      'BL4CK_PYRAM1D.exe -alice': 'player.html',
     };
 
     // 🗃️ Обычные команды (после диалога)
@@ -459,7 +459,7 @@
         return;
       }
       const db = {
-        'help': 'Команды: help, status, clear, alice_vape.exe',
+        'help': 'Команды: help, status, clear',
         'status': 'Система: ONLINE | Задержка: 12ms',
         'clear': () => { output.innerHTML = ''; return ''; }
       };
