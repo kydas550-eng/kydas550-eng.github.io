@@ -87,14 +87,38 @@
         .view.active { display: flex; flex-direction: column; }
 
         /* NOW PLAYING */
-        .art-container { width: 100%; aspect-ratio: 1; max-height: 240px; margin: 0 auto 16px; background: var(--bg-light); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; position: relative; }
+        .art-container {
+            width: 100%; aspect-ratio: 1; max-height: 240px; margin: 0 auto 16px;
+            background: var(--bg-light); border: 1px solid var(--border);
+            position: relative; overflow: hidden;
+        }
+        .art-container:not(.has-cover) {
+            display: flex; align-items: center; justify-content: center;
+        }
+        .cover-img {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            border-radius: 3px;
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 0.35s ease;
+            pointer-events: none;
+        }
+        .cover-img.is-visible { opacity: 1; }
         .vinyl {
             width: 180px; height: 180px; border-radius: 50%;
             background: radial-gradient(circle, #111 12%, var(--green-dark) 12.5%, var(--green-dark) 14%, #222 14.5%, #1a1a1a 100%);
             box-shadow: 0 0 15px rgba(0,255,65,0.15);
             display: flex; align-items: center; justify-content: center;
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
             will-change: transform;
+            position: relative; z-index: 1;
+        }
+        .art-container.has-cover .vinyl {
+            position: absolute;
+            bottom: 10px; right: 10px;
+            width: 92px; height: 92px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.55);
         }
         .vinyl.spinning { animation: spin 3s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -131,6 +155,11 @@
         /* PLAYLIST */
         .track-list { list-style: none; }
         .t-item { display: flex; align-items: center; padding: 10px 8px; border-bottom: 1px solid rgba(0,255,65,0.05); cursor: pointer; gap: 10px; transition: background 0.15s; }
+        .t-thumb {
+            width: 40px; height: 40px; flex-shrink: 0; object-fit: cover;
+            border-radius: 3px; border: 1px solid var(--border); background: var(--bg-lighter);
+        }
+        .t-thumb[hidden] { display: none !important; }
         .t-item:hover, .t-item.active { background: rgba(0,255,65,0.08); }
         .t-item.active .t-num { color: var(--green); }
         .t-num { font-family: var(--font-terminal); font-size: 14px; color: var(--green-dark); min-width: 24px; text-align: right; }
@@ -161,7 +190,17 @@
         /* MINI PLAYER */
         .mini { position: fixed; bottom: 42px; left: 0; right: 0; background: var(--bg-light); border-top: 1px solid var(--border); padding: 8px 16px; display: none; align-items: center; gap: 12px; z-index: 50; cursor: pointer; }
         .mini.vis { display: flex; }
-        .mini-art { width: 36px; height: 36px; background: var(--bg-lighter); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+        .mini-art {
+            width: 36px; height: 36px; flex-shrink: 0;
+            background: var(--bg-lighter); border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; position: relative; overflow: hidden;
+        }
+        .mini-art-img {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover;
+        }
+        .mini-art-icon { position: relative; z-index: 1; }
         .mini-info { flex: 1; min-width: 0; }
         .mini-t { font-size: 11px; color: var(--green); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .mini-a { font-size: 9px; color: var(--text-dim); }
@@ -174,24 +213,32 @@
         /* THEME: AMBER */
         body.amber { --green: #ffb000; --green-dim: #cc8d00; --green-dark: #806000; --green-glow: rgba(255,176,0,0.3); --text-dim: #aa7700; --border: #3a2a0a; --bg-light: #11100a; --bg-lighter: #1a1a0a; }
         body.cyan { --green: #00ffff; --green-dim: #00cccc; --green-dark: #006666; --green-glow: rgba(0,255,255,0.3); --text-dim: #008888; --border: #0a3a3a; --bg-light: #0a1111; --bg-lighter: #0a1a1a; }
+        /* THEME: PINK (по умолчанию) */
+        body.pink {
+            --green: #ff66b2;
+            --green-dim: #d9559a;
+            --green-dark: #993366;
+            --green-glow: rgba(255, 102, 178, 0.38);
+            --text-dim: #cc77aa;
+            --border: #3a1a2e;
+            --bg-light: #110810;
+            --bg-lighter: #1a0c14;
+        }
     </style>
 </head>
-<body>
+<body class="pink">
     <div class="crt-overlay"></div>
     <div class="crt-vignette"></div>
     <canvas id="matrixCanvas"></canvas>
 
     <div class="boot-screen" id="boot">
         <div class="boot-ascii">
- ██▀███  ▓█████▓█████▄▄▄█████▓ ██▓    ▄████▄  ▓█████ 
-▓██ ▒ ██▒▓█   ▀▓█   ▀▓  ██▒ ▓▒▓██▒   ▒██▀ ▀█  ▓█   ▀ 
-▓██ ░▄█ ▒▒███  ▒███  ▒ ▓██░ ▒░▒██░   ▒▓█    ▄ ▒███  
-▒██▀▀█▄  ▒▓█  ▄▒▓█  ▄░ ▓██▓ ░ ▒██░   ▒▓▓▄ ▄██▒▒▓█  ▄
-░██▓ ▒██▒░▒████░▒████▒ ▒██▒ ░ ░██████▒▓ ░██▓██░░▒████░
-░ ▒▓ ░▒▓░░░ ▒░ ░░ ▒░ ░ ▒ ░░   ░ ▒░▓  ░▒ ░ ▒▒ ░░░ ▒░ ░
-  ░▒ ░ ▒░ ░ ░  ░░ ░  ░   ░    ░ ░ ▒  ░  ░ ▒░  ░ ░  ░
-  ░░   ░    ░     ░    ░        ░ ░   ░ ░      ░   
-   ░        ░  ░  ░  ░            ░  ░  ░      ░  ░
+   █████╗ ██╗     ██╗ ██████╗███████╗ · ██╗   ██╗
+  ██╔══██╗██║     ██║██╔════╝██╔════╝ · ██║   ██║
+  ███████║██║     ██║██║     █████╗   · ██║   ██║
+  ██╔══██║██║     ██║██║     ██╔══╝   · ╚██╗ ██╔╝
+  ██║  ██║███████╗██║╚██████╗███████╗ ·  ╚████╔╝
+  ╚═╝  ╚═╝╚══════╝╚═╝ ╚═════╝╚══════╝ ·   ╚═══╝
         </div>
         <div class="boot-text" id="bootText"></div>
     </div>
@@ -199,7 +246,7 @@
     <div class="app-container" id="app" style="display:none;">
         <div class="header">
             <div class="header-top">
-                <div class="logo"><div class="status-dot"></div> TERM://PLAYER</div>
+                <div class="logo"><div class="status-dot"></div> TERM://AL1CE_V4PE.exe</div>
                 <div style="font-size:10px; color:var(--text-dim);" id="statusText">● ONLINE</div>
             </div>
         </div>
@@ -213,7 +260,10 @@
 
         <div class="main-content">
             <div class="view active" id="v-np">
-                <div class="art-container"><div class="vinyl" id="vinyl"><div class="vinyl-hole"></div></div></div>
+                <div class="art-container" id="artContainer">
+                    <img class="cover-img" id="coverImg" alt="" decoding="async" width="512" height="512">
+                    <div class="vinyl" id="vinyl"><div class="vinyl-hole"></div></div>
+                </div>
                 <div class="eq-bars" id="eq"></div>
                 <div class="track-info">
                     <div class="track-title" id="tTitle">INITIALIZING...</div>
@@ -248,10 +298,11 @@
             <div class="view" id="v-cfg">
                 <div class="set-group"><div class="set-title">⌘ COLOR_SCHEME</div>
                     <div class="set-row"><span class="set-label">Terminal Color</span>
-                        <div style="display:flex; gap:8px;">
-                            <button class="ctrl" onclick="setTheme('')" style="background:var(--green); width:24px; height:24px; border-radius:50%;"></button>
-                            <button class="ctrl" onclick="setTheme('amber')" style="background:#ffb000; width:24px; height:24px; border-radius:50%;"></button>
-                            <button class="ctrl" onclick="setTheme('cyan')" style="background:#00ffff; width:24px; height:24px; border-radius:50%;"></button>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button type="button" class="ctrl theme-dot" data-theme="pink" onclick="setTheme('pink')" style="background:#ff66b2; width:24px; height:24px; border-radius:50%;" title="Pink"></button>
+                            <button type="button" class="ctrl theme-dot" data-theme="" onclick="setTheme('')" style="background:#00ff41; width:24px; height:24px; border-radius:50%;" title="Green"></button>
+                            <button type="button" class="ctrl theme-dot" data-theme="amber" onclick="setTheme('amber')" style="background:#ffb000; width:24px; height:24px; border-radius:50%;" title="Amber"></button>
+                            <button type="button" class="ctrl theme-dot" data-theme="cyan" onclick="setTheme('cyan')" style="background:#00ffff; width:24px; height:24px; border-radius:50%;" title="Cyan"></button>
                         </div>
                     </div>
                 </div>
@@ -263,7 +314,10 @@
         </div>
 
         <div class="mini" id="mini">
-            <div class="mini-art" id="mArt">♫</div>
+            <div class="mini-art" id="mArt">
+                <img class="mini-art-img" id="mArtImg" alt="" decoding="async" hidden>
+                <span class="mini-art-icon" id="mArtIcon">♫</span>
+            </div>
             <div class="mini-info"><div class="mini-t" id="mTitle">---</div><div class="mini-a" id="mArtist">---</div></div>
             <div><button class="mini-btn" id="mPlay">▶</button><button class="mini-btn" id="mNext">⏭</button></div>
         </div>
@@ -277,7 +331,7 @@
     <script>
         // ===== TELEGRAM INIT =====
         const tg = window.Telegram?.WebApp;
-        if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#0a0a0a'); }
+        if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#140810'); }
 
         // ===== TRACKS =====
         // url — прямая ссылка на аудиофайл в репозитории (или CDN).
@@ -286,9 +340,18 @@
         //   https://cdn.jsdelivr.net/gh/USER/REPO@main/music/track.mp3
         // Репозиторий — публичный; форматы mp3/ogg/wav обычно ок в Telegram WebView.
         // Пустой url — демо-генерация (genBuf), как раньше.
+        // cover — URL картинки (jpg/png/webp), raw.githubusercontent.com или Pages; пусто — только «винил».
         const TRACKS = [
-            // Нужна прямая ссылка на файл: raw.githubusercontent.com или GitHub Pages, НЕ страница /blob/...
-            { id:1, t:'W3LC0ME_2_TH3_0TH3R_SYD3.bat', a:'ALICE_VAPE', alb:'30001', d:187, i:'💾', url: 'https://raw.githubusercontent.com/kydas550-eng/kydas550-eng.github.io/main/W3LC0ME_2_TH3_0TH3R_SYD3.mp3' },
+            {
+                id: 1,
+                t: 'W3LC0ME_2_TH3_0TH3R_SYD3.bat',
+                a: 'ALICE_VAPE',
+                alb: '30001',
+                d: 187,
+                i: '💾',
+                url: 'https://raw.githubusercontent.com/kydas550-eng/kydas550-eng.github.io/main/W3LC0ME_2_TH3_0TH3R_SYD3.mp3',
+                cover: 'https://raw.githubusercontent.com/kydas550-eng/kydas550-eng.github.io/main/zg0r0v2va7fe1.jpeg',
+            },
         ];
 
         // ===== OPTIMIZED AUDIO ENGINE =====
@@ -314,6 +377,7 @@
             if (!audioEl) {
                 audioEl = new Audio();
                 audioEl.crossOrigin = 'anonymous';
+                audioEl.preload = 'auto';
                 audioEl.addEventListener('error', () => {
                     const err = audioEl.error;
                     const code = err ? err.code : '?';
@@ -548,6 +612,64 @@
 
         function fmtT(s) { const m=Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
 
+        function syncVinylVisibility() {
+            const on = document.getElementById('tVinyl').classList.contains('on');
+            document.getElementById('vinyl').style.display = on ? 'flex' : 'none';
+        }
+
+        function applyTrackArt(tr) {
+            const artContainer = document.getElementById('artContainer');
+            const coverImg = document.getElementById('coverImg');
+            const raw = tr.cover && String(tr.cover).trim();
+            const url = raw ? normalizeStreamUrl(raw) : '';
+
+            coverImg.classList.remove('is-visible');
+            coverImg.onload = null;
+            coverImg.onerror = null;
+
+            if (url) {
+                artContainer.classList.add('has-cover');
+                coverImg.alt = tr.t || 'Cover';
+                coverImg.onload = () => { coverImg.classList.add('is-visible'); };
+                coverImg.onerror = () => {
+                    artContainer.classList.remove('has-cover');
+                    coverImg.removeAttribute('src');
+                    coverImg.classList.remove('is-visible');
+                };
+                coverImg.src = url;
+                if (coverImg.complete && coverImg.naturalWidth > 0) {
+                    coverImg.classList.add('is-visible');
+                }
+            } else {
+                artContainer.classList.remove('has-cover');
+                coverImg.removeAttribute('src');
+            }
+
+            const mImg = document.getElementById('mArtImg');
+            const mIcon = document.getElementById('mArtIcon');
+            mImg.onload = null;
+            mImg.onerror = null;
+            if (url) {
+                mImg.hidden = false;
+                mIcon.hidden = true;
+                mImg.alt = '';
+                mImg.onerror = () => {
+                    mImg.removeAttribute('src');
+                    mImg.hidden = true;
+                    mIcon.hidden = false;
+                    mIcon.textContent = tr.i || '♫';
+                };
+                mImg.src = url;
+            } else {
+                mImg.removeAttribute('src');
+                mImg.hidden = true;
+                mIcon.hidden = false;
+                mIcon.textContent = tr.i || '♫';
+            }
+
+            syncVinylVisibility();
+        }
+
         function updateUI() {
             const tr = TRACKS[idx];
             document.getElementById('tTitle').textContent = tr.t;
@@ -558,7 +680,7 @@
             document.getElementById('mini').classList.toggle('vis', !!ctx);
             document.getElementById('mTitle').textContent = tr.t;
             document.getElementById('mArtist').textContent = tr.a;
-            document.getElementById('mArt').textContent = tr.i;
+            applyTrackArt(tr);
             document.getElementById('vinyl').classList.toggle('spinning', isPlaying);
             
             // EQ
@@ -573,14 +695,46 @@
         function buildQueue() {
             const l = document.getElementById('qList');
             l.innerHTML = '';
-            TRACKS.forEach((tr,i) => {
+            TRACKS.forEach((tr, i) => {
                 const li = document.createElement('li');
-                li.className = 't-item' + (i===idx?' active':'');
-                li.innerHTML = `<span class="t-num">${String(i+1).padStart(2,'0')}</span><div class="t-info"><div class="t-title">${tr.t}</div><div class="t-artist">${tr.a}</div></div><span class="t-dur">${tr.d ? fmtT(tr.d) : '—'}</span>`;
+                li.className = 't-item' + (i === idx ? ' active' : '');
+
+                const thumb = document.createElement('img');
+                thumb.className = 't-thumb';
+                thumb.alt = '';
+                const cov = tr.cover && String(tr.cover).trim();
+                if (cov) {
+                    thumb.src = normalizeStreamUrl(cov);
+                    thumb.onerror = () => { thumb.hidden = true; };
+                } else thumb.hidden = true;
+
+                const num = document.createElement('span');
+                num.className = 't-num';
+                num.textContent = String(i + 1).padStart(2, '0');
+
+                const info = document.createElement('div');
+                info.className = 't-info';
+                const tEl = document.createElement('div');
+                tEl.className = 't-title';
+                tEl.textContent = tr.t;
+                const aEl = document.createElement('div');
+                aEl.className = 't-artist';
+                aEl.textContent = tr.a;
+                info.appendChild(tEl);
+                info.appendChild(aEl);
+
+                const dur = document.createElement('span');
+                dur.className = 't-dur';
+                dur.textContent = tr.d ? fmtT(tr.d) : '—';
+
+                li.appendChild(thumb);
+                li.appendChild(num);
+                li.appendChild(info);
+                li.appendChild(dur);
                 li.onclick = () => playTrack(i);
                 l.appendChild(li);
             });
-            document.getElementById('qMeta').textContent = `${TRACKS.length} tracks | ${fmtT(TRACKS.reduce((a,b)=>a+b.d,0))}`;
+            document.getElementById('qMeta').textContent = `${TRACKS.length} tracks | ${fmtT(TRACKS.reduce((a, b) => a + (b.d || 0), 0))}`;
         }
 
         function buildLib() {
@@ -643,9 +797,21 @@
         // ===== SETTINGS =====
         window.setTheme = t => {
             document.body.className = t;
-            document.querySelectorAll('.ctrl[onclick^="setTheme"]').forEach(b => b.style.boxShadow = b.getAttribute('onclick').includes(t) ? '0 0 8px var(--green)' : '');
+            document.querySelectorAll('.theme-dot').forEach(b => {
+                const want = b.getAttribute('data-theme') || '';
+                b.style.boxShadow = want === t ? '0 0 10px var(--green)' : '';
+            });
+            if (tg?.setHeaderColor) {
+                if (t === 'amber') tg.setHeaderColor('#0f0c08');
+                else if (t === 'cyan') tg.setHeaderColor('#0a1111');
+                else if (t === 'pink') tg.setHeaderColor('#140810');
+                else tg.setHeaderColor('#0a0a0a');
+            }
         };
-        document.getElementById('tVinyl').onclick = function() { this.classList.toggle('on'); document.getElementById('vinyl').style.display = this.classList.contains('on')?'flex':'none'; };
+        document.getElementById('tVinyl').onclick = function() {
+            this.classList.toggle('on');
+            syncVinylVisibility();
+        };
 
         // ===== NAV =====
         function switchV(v) {
@@ -679,8 +845,19 @@
         // ===== CLOCK =====
         setInterval(() => { const n=new Date(); document.getElementById('fClock').textContent = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`; }, 1000);
 
+        function preloadFirstStreamTrack() {
+            const tr = TRACKS[0];
+            if (!tr || !tr.url || !String(tr.url).trim()) return;
+            const u = normalizeStreamUrl(String(tr.url).trim());
+            ensureStreamAudio();
+            audioEl.preload = 'auto';
+            audioEl.src = u;
+            audioEl.load();
+        }
+
         // ===== BOOT =====
         async function boot() {
+            setTheme('pink');
             const lines = ['[ OK ] Kernel modules loaded...','[ OK ] Audio subsystem initialized...','[ OK ] Neural codec v4.2 mounted...','[ OK ] Decryption verified.','[READY] TERM://PLAYER ONLINE.'];
             const box = document.getElementById('bootText');
             for (const l of lines) {
@@ -692,6 +869,7 @@
             document.getElementById('boot').classList.add('hidden');
             document.getElementById('app').style.display='flex';
             buildQueue(); buildLib(); buildEQ(); updateUI();
+            preloadFirstStreamTrack();
         }
         boot();
     </script>
